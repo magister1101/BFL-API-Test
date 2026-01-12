@@ -9,16 +9,16 @@
 	"compatibility_date": "2025-09-27",
 	"observability": {
 		"enabled": true
-	},
+	}
 	// "ai": {
 	// 	"binding": "AI",
 	// },
-	"kv_namespaces": [
-		{
-			"binding": "PHOTOS_KV",
-			"id": "5136d2fa6e62420cbffe8338e2af42fd"
-		}
-	],
+	// "kv_namespaces": [
+	// 	{
+	// 		"binding": "PHOTOS_KV",
+	// 		"id": "5136d2fa6e62420cbffe8338e2af42fd"
+	// 	}
+	// ]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -36,16 +36,15 @@
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	"vars": {
-		"FLUX_MODEL": "@cf/black-forest-labs/flux-1-schnell",
-		"BASE_URL": "https://your-app.pages.dev" // frontend URL
-	},
-	"r2_buckets": [
-		{
-			"binding": "IMAGES",
-			"bucket_name": "photobooth-images"
-		}
-	]
+	// "vars": {
+
+	// }
+	// "r2_buckets": [
+	// 	{
+	// 		"binding": "IMAGES",
+	// 		"bucket_name": "photobooth-images"
+	// 	}
+	// ]
 	/**
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/
