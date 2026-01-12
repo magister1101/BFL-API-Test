@@ -87,37 +87,64 @@ app.post('/api/getImage', async (c) => {
 		const { imageUrl } = await c.req.json();
 
 		if (!imageUrl) {
-			return c.json({ error: 'Image URL is required' }, 400);
+			return c.json({ error: 'No polling URL returned from BFL API' }, 500);
 		}
 
-		let status = 'Pending';
-		let counter = 1;
+		const maxAttempts = 45;
+		const delayMs = 2000;
+		let attempts = 0;
 		let data: any;
-		while (status === 'Pending') {
+
+		while (attempts < maxAttempts) {
 			const response = await fetch(imageUrl);
 
 			if (!response.ok) {
-				return c.json({ error: 'Failed to fetch image' }, 500);
+				return c.json({ error: 'Failed to fetch polling status' }, 500);
 			}
 
 			data = await response.json();
+			attempts++;
 
-			status = data.status;
+			console.log(`Poll attempt ${attempts}: status = ${data.status}`);
 
-			await fetch(imageUrl);
-			console.log(data.status);
-			console.log(counter++);
-			if (counter == 120) {
+			if (data.status === 'Ready') {
 				break;
 			}
+
+			if (data.status === 'Pending') {
+				await new Promise((resolve) => setTimeout(resolve, delayMs));
+				continue;
+			}
+
+			return c.json({ error: `Unexpected status: ${data.status}` }, 500);
 		}
 
-		if (status === 'Pending') {
-			return c.json({ error: 'Image processing is pending' }, 500);
+		if (attempts >= maxAttempts) {
+			return c.json(
+				{
+					error: 'Image processing timed out after multiple attempts',
+				},
+				500
+			);
 		}
 
-		const imageSampleUrl = data.result.sample;
+		if (data.status !== 'Ready') {
+			return c.json(
+				{
+					error: `Image processing failed with status: ${data.status}`,
+				},
+				500
+			);
+		}
 
+		const imageSampleUrl = data.result?.sample || data.sample;
+
+		if (!imageSampleUrl) {
+			console.log('Data structure:', data);
+			return c.json({ error: 'No image URL in result' }, 500);
+		}
+
+		console.log(`Success after ${attempts} attempts`);
 		return c.json({ image: imageSampleUrl });
 	} catch (error: any) {
 		console.error('Error fetching image:', error);
