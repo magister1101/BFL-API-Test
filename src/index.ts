@@ -1,77 +1,13 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+
 type Bindings = {
 	BFL_API_KEY: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-app.use('*', async (c, next) => {
-	c.header('Access-Control-Allow-Origin', '*');
-	await next();
-});
-
-app.post('/api/create', async (c) => {
-	try {
-		const apiKey = c.env.BFL_API_KEY;
-
-		if (!apiKey) {
-			return c.json({ error: 'API key missing' }, 500);
-		}
-
-		const formData = await c.req.parseBody();
-		const prompt = formData['prompt'] as string;
-		const imageFile = formData['image'] as File;
-
-		if (!prompt) {
-			//back up prompt incase of empty prompt
-			const newPrompt = `[photo reference 1] people with minimal cybernetic enhancements: Illuminated seam detailing on jacket collar reacting to ambient light, Subtle holographic data stream projection floating around the person. Background from [photo reference 2] (text removed) with cyberpunk color grading, Photorealistic, sci-fi. take inspiration from [photo reference 3]`;
-
-			return c.json({ error: 'Prompt required' }, 400);
-		}
-
-		if (!imageFile || !(imageFile instanceof File)) {
-			return c.json({ error: 'Image file required' }, 400);
-		}
-
-		const imageBuffer = await imageFile.arrayBuffer();
-		const base64 = arrayBufferToBase64(imageBuffer);
-
-		const bflRequest = {
-			prompt: prompt,
-			input_image: base64,
-			seed: 1,
-			width: 512,
-			height: 512,
-			safety_tolerance: 0,
-			output_format: 'jpeg',
-		};
-
-		const response = await fetch('https://api.bfl.ai/v1/flux-2-pro', {
-			method: 'POST',
-			headers: {
-				'x-key': apiKey,
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify(bflRequest),
-		});
-
-		if (!response.ok) {
-			const error = await response.text();
-			return c.json({ error: `BFL API error: ${error}` }, 500);
-		}
-
-		const result = await response.json();
-
-		return c.json({
-			success: true,
-			result: result,
-			prompt: prompt,
-			timestamp: new Date().toISOString(),
-		});
-	} catch (error: any) {
-		return c.json({ error: error.message }, 500);
-	}
-});
+app.use('*', cors());
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
 	const bytes = new Uint8Array(buffer);
@@ -91,7 +27,7 @@ app.post('/api/getImage', async (c) => {
 		}
 
 		const maxAttempts = 45;
-		const delayMs = 2000;
+		const delayMs = 1000;
 		let attempts = 0;
 		let data: any;
 
@@ -183,6 +119,8 @@ app.post('/api/generate', async (c) => {
 		const width = formData['width'] as string;
 		const height = formData['height'] as string;
 
+		console.log('original prompt:', prompt);
+
 		var imageWidth = parseInt(width) || 1024;
 		var imageHeight = parseInt(height) || 1024;
 		var imagePrompt = prompt;
@@ -199,12 +137,14 @@ app.post('/api/generate', async (c) => {
 		const base64Image = arrayBufferToBase64(imageBuffer);
 
 		const bflRequest = {
-			prompt: imagePrompt,
+			prompt: prompt,
 			input_image: base64Image,
+			input_image_2: 'https://storage.googleapis.com/eva-assets/aignite_2.jpg',
+			input_image_3: 'https://storage.googleapis.com/eva-assets/aignite_3.webp',
 			seed: 1,
 			width: imageWidth,
 			height: imageHeight,
-			safety_tolerance: 0,
+			safety_tolerance: 4,
 			output_format: 'jpeg',
 		};
 
@@ -229,11 +169,12 @@ app.post('/api/generate', async (c) => {
 			return c.json({ error: 'No polling URL returned from BFL API' }, 500);
 		}
 
-		const maxAttempts = 45;
-		const delayMs = 2000;
+		const maxAttempts = 30;
+		const delayMs = 1000;
 		let attempts = 0;
 		let data: any;
 
+		await new Promise((resolve) => setTimeout(resolve, 20_000));
 		while (attempts < maxAttempts) {
 			const response = await fetch(imageUrl);
 
@@ -276,6 +217,8 @@ app.post('/api/generate', async (c) => {
 			);
 		}
 
+		console.log({ bflResult, data });
+
 		const imageSampleUrl = data.result?.sample || data.sample;
 
 		if (!imageSampleUrl) {
@@ -284,7 +227,14 @@ app.post('/api/generate', async (c) => {
 		}
 
 		console.log(`Success after ${attempts} attempts`);
-		return c.json({ image: imageSampleUrl });
+		const aiResponse = await fetch(imageSampleUrl);
+
+		const aiBlob = await aiResponse.blob();
+		const headers = {
+			'Content-Type': aiResponse.headers.get('Content-Type') || 'image/jpeg',
+		};
+
+		return c.body(await aiBlob.arrayBuffer(), 200, headers);
 	} catch (error: any) {
 		console.error('Error in image generation:', error);
 		return c.json(
